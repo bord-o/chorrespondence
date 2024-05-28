@@ -1,0 +1,5 @@
+(library
+ (name chorrespondence)
+ (libraries timedesc digestif eio)
+ (preprocess (pps ppx_deriving.show))
+ )
