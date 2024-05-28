@@ -1,6 +1,6 @@
 (executable
  (public_name chorrespondence)
  (name main)
- (libraries chorrespondence digestif eio.unix eio_main cohttp-eio logs.fmt logs.threaded)
+ (libraries chorrespondence digestif eio.unix eio_main cohttp-eio logs.fmt logs.threaded ipaddr fmt)
  (preprocess (pps ppx_deriving.show))
  )

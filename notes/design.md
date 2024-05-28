@@ -67,3 +67,11 @@ value:
     - Asks for N1's pred and sets its pred to that. N2{succ=N1;pred=None} N1{succ=None;pred=None}
     - Tells N1 to update its pred to N2. N2{succ=N1;pred=None} N1{succ=None;pred=N2}
     - Stabilize: N2 asks N1 for its pred and decides if it is between N1 and N2 e.g. it should be N2's succ instead.
+
+### Questions
+- Its still unclear how nodes know how to give up responsibility for keys when a new node joins
+  - do i need more endpoints for this?
+  - do i need to do it at all?
+
+- When the network is only 2 people, how do they know to set succ AND pred to each other?
+  - does this happen in 'stabilize'?
