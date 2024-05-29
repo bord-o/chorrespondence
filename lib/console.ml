@@ -31,7 +31,23 @@ let get ~addr ~endpoint ~sw ~env =
     Eio.traceln "Error Status:%s" @@ Http.Status.to_string resp.status;
     Error `ErrorStatus)
 
-(* TODO: write post shorthand and wire up endpoints *)
+let post ~addr ~endpoint ~json ~sw ~env =
+  let* ip, port = parse_addr addr in
+  let client = Client.make ~https:None env#net in
+  let node = Yojson.Safe.to_string json in
+  let body_json = Cohttp_eio.Body.of_string node in
+  let resp, body =
+    Client.post ~body:body_json ~sw client
+      (Uri.of_string
+      @@ Printf.sprintf "http://%s:%i/%s" (Ipaddr.to_string ip) port endpoint)
+  in
+  if Http.Status.compare resp.status `OK = 0 then
+    let res = Eio.Buf_read.(parse_exn take_all) body ~max_size:max_int in
+    Ok res
+  else (
+    Eio.traceln "Error Status:%s" @@ Http.Status.to_string resp.status;
+    Error `ErrorStatus)
+
 (* TODO: extract lookup/store/get/set into functions to be shared with the join/find_succ algorithms *)
 (* TODO: write the find_successor function *)
 (* TODO: write the notify function *)
@@ -59,10 +75,32 @@ let spawn sw env node =
         let msg = String.concat " " msg in
         Eio.traceln "Storing message %s with content: %s" id msg
     | "set_succ" :: who :: what :: _ ->
-        Eio.traceln "setting succ of %s to %s" who what
-    | "get_succ" :: who :: _ -> Eio.traceln "getting succ of %s" who
+        Eio.traceln "setting succ of %s to %s" who what;
+        let body =
+          Json_types.node_to_yojson
+            Json_types.
+              {
+                sha1_hex =
+                  Digestif.SHA1.digest_string what |> Digestif.SHA1.to_hex;
+                addr = what;
+              }
+        in
+        post ~json:body ~addr:who ~endpoint:"succ" ~sw ~env |> handle_errors
+    | "get_succ" :: who :: _ ->
+        Eio.traceln "getting succ of %s" who;
+        get ~addr:who ~endpoint:"succ" ~sw ~env |> handle_errors
     | "set_pred" :: who :: what :: _ ->
-        Eio.traceln "setting pred of %s to %s" who what
+        Eio.traceln "setting pred of %s to %s" who what;
+        let body =
+          Json_types.node_to_yojson
+            Json_types.
+              {
+                sha1_hex =
+                  Digestif.SHA1.digest_string what |> Digestif.SHA1.to_hex;
+                addr = what;
+              }
+        in
+        post ~json:body ~addr:who ~endpoint:"pred" ~sw ~env |> handle_errors
     | "get_pred" :: who :: _ ->
         Eio.traceln "getting pred of %s" who;
         let res = get ~addr:who ~endpoint:"pred" ~sw ~env in
@@ -73,7 +111,24 @@ let spawn sw env node =
         Eio.traceln "Current node details: \n%s" @@ Node.show !node
     | "help" :: _ ->
         Eio.traceln
-          "Usage: lookup [id] | store [@id] [message] | debug | leave | help"
+          {|Usage:
+    lookup [id] 
+    store [@id] [message] 
+    set_succ [id] [value]
+    set_pred [id] [value]
+    get_succ [id]
+    get_pred [id]
+
+    stabilize
+    notify
+    fingers
+
+    set_my_succ [value]
+    set_my_pred [value]
+
+    debug 
+    leave 
+    help|}
     (* =======================MANUAL STATE MAINTANENCE COMMANDS======================================= *)
     | "lookup" :: _ -> Eio.traceln "Usage: lookup [id]"
     | "stabilize" :: _ -> Eio.traceln "Stabilizing..."

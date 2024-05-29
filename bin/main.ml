@@ -76,22 +76,12 @@ let main () =
     match task with
     | `Init me_addr ->
         print_endline "Initializing connection and picking a port to use...";
-        {
-          id = (Digestif.SHA1.digest_string me_addr, me_addr);
-          succ = Some (Digestif.SHA1.digest_string me_addr, me_addr);
-          pred = None;
-          map = [];
-          in_ring = true;
-        }
+        let id = (Digestif.SHA1.digest_string me_addr, me_addr) in
+        { id; succ = Some id; pred = Some id; map = []; in_ring = true }
     | `Join (me_addr, join_addr) ->
         Printf.printf "Joining the network using peer %s...\n" join_addr;
-        {
-          id = (Digestif.SHA1.digest_string me_addr, me_addr);
-          succ = Some (Digestif.SHA1.digest_string me_addr, me_addr);
-          pred = None;
-          map = [];
-          in_ring = true;
-        }
+        let id = (Digestif.SHA1.digest_string me_addr, me_addr) in
+        { id; succ = Some id; pred = None; map = []; in_ring = true }
   in
 
   let shared_me = ref me in

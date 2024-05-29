@@ -42,6 +42,21 @@ let spawn sw env node =
 
         let resp_json = {|"success": "successor set successfully"|} in
         (Http.Response.make (), Cohttp_eio.Body.of_string resp_json)
+    | "/pred" when Http.Request.meth request = Http.(`POST) ->
+        let body_str = Eio.Flow.read_all body in
+        let body_json =
+          node_of_yojson (Yojson.Safe.from_string body_str) |> Result.get_ok
+          (* TODO: handle errors here. Just need to return results for endpoints and add cases to handle_errors and call it at the end of the handler *)
+        in
+        (* TODO: we should really validate that the data is good before we just mutate our state based on an arbitrary request *)
+        node :=
+          {
+            !node with
+            pred = Some (Digestif.SHA1.of_hex body_json.sha1_hex, body_json.addr);
+          };
+
+        let resp_json = {|"success": "predecessor set successfully"|} in
+        (Http.Response.make (), Cohttp_eio.Body.of_string resp_json)
     | "/succ" when Http.Request.meth request = Http.(`GET) ->
         let json =
           match !node.succ with
