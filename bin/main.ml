@@ -42,10 +42,6 @@ let speclist =
 
 let validate () =
   let () = Arg.parse speclist anon_fun usage_msg in
-  let () =
-    Printf.printf "init: %b, me_addr %s, join_addr %s\n\n" !init !me_addr
-      !join_addr
-  in
   if
     Array.length Sys.argv < 2
     || ((not @@ Array.mem "-j" Sys.argv) && (not @@ Array.mem "-i" Sys.argv))
@@ -91,7 +87,7 @@ let main () =
         Printf.printf "Joining the network using peer %s...\n" join_addr;
         {
           id = (Digestif.SHA1.digest_string me_addr, me_addr);
-          succ = Some (Digestif.SHA1.digest_string join_addr, join_addr);
+          succ = Some (Digestif.SHA1.digest_string me_addr, me_addr);
           pred = None;
           map = [];
           in_ring = true;

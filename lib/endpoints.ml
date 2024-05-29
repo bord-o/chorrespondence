@@ -1,6 +1,7 @@
 (* The endpoints *)
 open Cohttp_eio
 open Node
+open Json_types
 
 let ( let* ) x f = Result.bind x f
 let parse_addr = Ipaddr.with_port_of_string ~default:8080
@@ -23,9 +24,43 @@ let spawn sw env node =
   let* ip, port = parse_addr @@ snd !node.id in
   let text = "testtesttest" in
 
-  let handler _socket request _body =
+  let handler _socket request (body : Cohttp_eio.Body.t) =
     match Http.Request.resource request with
     | "/" -> (Http.Response.make (), Cohttp_eio.Body.of_string text)
+    | "/succ" when Http.Request.meth request = Http.(`POST) ->
+        let body_str = Eio.Flow.read_all body in
+        let body_json =
+          node_of_yojson (Yojson.Safe.from_string body_str) |> Result.get_ok
+          (* TODO: handle errors here. Just need to return results for endpoints and add cases to handle_errors and call it at the end of the handler *)
+        in
+        (* TODO: we should really validate that the data is good before we just mutate our state based on an arbitrary request *)
+        node :=
+          {
+            !node with
+            succ = Some (Digestif.SHA1.of_hex body_json.sha1_hex, body_json.addr);
+          };
+
+        let resp_json = {|"success": "successor set successfully"|} in
+        (Http.Response.make (), Cohttp_eio.Body.of_string resp_json)
+    | "/succ" when Http.Request.meth request = Http.(`GET) ->
+        let json =
+          match !node.succ with
+          | Some (sha, addr) ->
+              { sha1_hex = Digestif.SHA1.to_hex sha; addr }
+              |> node_to_yojson |> Yojson.Safe.to_string
+          | None -> "{\"error\":\"no successor set\"}"
+        in
+        (Http.Response.make (), Cohttp_eio.Body.of_string json)
+    | "/pred" when Http.Request.meth request = Http.(`GET) ->
+        let json =
+          match !node.pred with
+          | Some (sha, addr) ->
+              { sha1_hex = Digestif.SHA1.to_hex sha; addr }
+              |> node_to_yojson |> Yojson.Safe.to_string
+          | None -> "{\"error\":\"no predecessor set\"}"
+        in
+
+        (Http.Response.make (), Cohttp_eio.Body.of_string json)
     | s ->
         ( Http.Response.make (),
           Cohttp_eio.Body.of_string (Printf.sprintf "Your route is: %s" s) )
