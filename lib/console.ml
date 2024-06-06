@@ -53,6 +53,57 @@ let post ~addr ~endpoint ~json ~sw ~env =
 (* TODO: write the notify function *)
 (* TODO: write the stabilize function *)
 (* TODO: figure out what needs to be scheduled*)
+let dist_sha1 (lh, _) (rh, _) =
+  let m = Z.pow (Z.of_int 2) 160 in
+  let l = "0x" ^ Digestif.SHA1.to_hex lh |> Z.of_string in
+  let r = "0x" ^ Digestif.SHA1.to_hex rh |> Z.of_string in
+  Z.((r - l + m) mod m)
+
+let within_range_ce start id end_ =
+  let dist_start_id = dist_sha1 start id in
+  let dist_start_end = dist_sha1 start end_ in
+  dist_start_id > Z.of_int 0 && dist_start_id <= dist_start_end
+
+let within_range_oe start id end_ =
+  let dist_start_id = dist_sha1 start id in
+  let dist_start_end = dist_sha1 start end_ in
+  dist_start_id > Z.of_int 0 && dist_start_id < dist_start_end
+
+let closest_preceeding_node me id ~sw ~env =
+  (* if succ is between me and id then return succ, else return me *)
+  (* Eio.traceln "finding closest"; *)
+  let succ = me.succ |> Option.get in
+  (* Eio.traceln "Comparing %s to %s" (snd me.id) (snd succ); *)
+  if within_range_oe me.id succ id then
+    (* TODO: all of these comparisons need to use the SHA hash distance function *)
+    (* Eio.traceln "finding closest"; *)
+    let succsucc =
+      Eio.traceln "sending request";
+      get ~addr:(snd succ) ~endpoint:"succ" ~sw ~env
+      |> Result.get_ok |> Yojson.Safe.from_string |> Json_types.node_of_yojson
+      |> Result.get_ok
+    in
+    {
+      id = succ;
+      succ = Some (succsucc.sha1_hex |> Digestif.SHA1.of_hex, succsucc.addr);
+      pred = None;
+      map = [];
+      in_ring = true;
+    }
+  else me (* why is this route always taken *)
+
+let rec find_successor (me : Node.t) (id : Digestif.SHA1.t * string) ~sw ~env =
+  (* Eio.traceln "finding succ"; *)
+  let succ = me.succ |> Option.get in
+  if id = me.id then me.id
+  else if within_range_ce me.id id succ then (
+    Eio.traceln "in range...";
+    succ
+    (* TODO: all of these comparisons need to use the SHA hash distance function *)
+    (* how to make this work for one node *))
+  else
+    let closest = closest_preceeding_node me id ~sw ~env in
+    find_successor closest id ~sw ~env
 
 let spawn sw env node =
   print_endline "entering console...\n";
@@ -71,6 +122,11 @@ let spawn sw env node =
         Eio.traceln "Exiting...";
         Eio.Switch.fail sw ExitConsole
         (* TODO: make this leave the network gracefully *)
+    | "find_succ" :: id :: _ ->
+        let succ =
+          find_successor !node (Digestif.SHA1.digest_string id, id) ~sw ~env
+        in
+        Eio.traceln "successor is: %s" (snd succ)
     | "store" :: "@" :: id :: msg ->
         let msg = String.concat " " msg in
         Eio.traceln "Storing message %s with content: %s" id msg
@@ -88,7 +144,8 @@ let spawn sw env node =
         post ~json:body ~addr:who ~endpoint:"succ" ~sw ~env |> handle_errors
     | "get_succ" :: who :: _ ->
         Eio.traceln "getting succ of %s" who;
-        get ~addr:who ~endpoint:"succ" ~sw ~env |> handle_errors
+        let res = get ~addr:who ~endpoint:"succ" ~sw ~env in
+        Eio.traceln "succ is %s" (res |> Result.get_ok)
     | "set_pred" :: who :: what :: _ ->
         Eio.traceln "setting pred of %s to %s" who what;
         let body =
