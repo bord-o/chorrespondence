@@ -127,9 +127,42 @@ let spawn sw env node =
           find_successor !node (Digestif.SHA1.digest_string id, id) ~sw ~env
         in
         Eio.traceln "successor is: %s" (snd succ)
+    | [ "lookup"; id ] ->
+        Eio.traceln "calling lookup at %s" id;
+        let sha1_id = Digestif.SHA1.digest_string id in
+        let id_succ = find_successor !node (sha1_id, id) ~sw ~env in
+        Eio.traceln "find succ successful: %s" (snd id_succ);
+        let body =
+          Json_types.lookup_to_yojson
+            Json_types.{ sha1_hex = sha1_id |> Digestif.SHA1.to_hex }
+        in
+        Eio.traceln "calling lookup with %s" (snd id_succ);
+        let (Ok resp) =
+          post ~json:body ~addr:(snd id_succ) ~endpoint:"lookup" ~sw ~env
+        in
+        let (Ok json) =
+          Yojson.Safe.from_string resp |> Json_types.found_of_yojson
+        in
+        Eio.traceln "value is: %s" json.payload
     | "store" :: "@" :: id :: msg ->
-        let msg = String.concat " " msg in
-        Eio.traceln "Storing message %s with content: %s" id msg
+        (* to store a value we need to hash the id, find the successor for it, request the found successor to store the value, then report success *)
+        Eio.traceln "calling store at %s" id;
+        let sha1_id = Digestif.SHA1.digest_string id in
+        let id_succ = find_successor !node (sha1_id, id) ~sw ~env in
+        Eio.traceln "find succ successful: %s" (snd id_succ);
+        let body =
+          Json_types.payload_to_yojson
+            Json_types.
+              {
+                sha1_hex = sha1_id |> Digestif.SHA1.to_hex;
+                payload =
+                  List.fold_left (fun acc s -> acc ^ s ^ " ") "" msg
+                  |> String.trim;
+              }
+        in
+        Eio.traceln "calling store with %s" (snd id_succ);
+        post ~json:body ~addr:(snd id_succ) ~endpoint:"store" ~sw ~env
+        |> handle_errors
     | "set_succ" :: who :: what :: _ ->
         Eio.traceln "setting succ of %s to %s" who what;
         let body =
@@ -163,7 +196,6 @@ let spawn sw env node =
         let res = get ~addr:who ~endpoint:"pred" ~sw ~env in
         Eio.traceln "pred is %s" (res |> Result.get_ok)
     | "store" :: _ -> Eio.traceln "Usage: "
-    | [ "lookup"; id ] -> Eio.traceln "Looking up message %s" id
     | "debug" :: _ ->
         Eio.traceln "Current node details: \n%s" @@ Node.show !node
     | "help" :: _ ->

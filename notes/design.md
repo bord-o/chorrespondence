@@ -75,3 +75,24 @@ value:
 
 - When the network is only 2 people, how do they know to set succ AND pred to each other?
   - does this happen in 'stabilize'?
+
+### Testing addresses
+
+192.168.1.30
+
+
+no
+8070 ----> 8090
+^            |
+|            |
+ \          /
+  -- 8080 <-
+
+no
+8090 -> 8070 -> 8080
+
+yes
+8090 -> 8080 -> 8070
+
+
+

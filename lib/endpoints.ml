@@ -27,6 +27,46 @@ let spawn sw env node =
   let handler _socket request (body : Cohttp_eio.Body.t) =
     match Http.Request.resource request with
     | "/" -> (Http.Response.make (), Cohttp_eio.Body.of_string text)
+    | "/lookup" when Http.Request.meth request = Http.(`POST) -> (
+        let body_str = Eio.Flow.read_all body in
+        let body_json =
+          lookup_of_yojson (Yojson.Safe.from_string body_str) |> Result.get_ok
+          (* TODO: handle errors here. Just need to return results for endpoints and add cases to handle_errors and call it at the end of the handler *)
+        in
+        (* TODO: we should really validate that the data is good before we just mutate our state based on an arbitrary request *)
+        let found =
+          !node.map
+          |> List.find_opt (fun (sha, _) ->
+                 sha = Digestif.SHA1.of_hex body_json.sha1_hex)
+        in
+        match found with
+        | None ->
+            let resp_json = {|"error": "node not found"|} in
+            (Http.Response.make (), Cohttp_eio.Body.of_string resp_json)
+        | Some (_, payload) ->
+            let found =
+              { success = "node found"; payload } |> Json_types.found_to_yojson
+            in
+            let resp_json = found |> Yojson.Safe.to_string in
+            (Http.Response.make (), Cohttp_eio.Body.of_string resp_json))
+    | "/store" when Http.Request.meth request = Http.(`POST) ->
+        Eio.traceln "Storing endpoint";
+        let body_str = Eio.Flow.read_all body in
+        let body_json =
+          payload_of_yojson (Yojson.Safe.from_string body_str) |> Result.get_ok
+          (* TODO: handle errors here. Just need to return results for endpoints and add cases to handle_errors and call it at the end of the handler *)
+        in
+        (* TODO: we should really validate that the data is good before we just mutate our state based on an arbitrary request *)
+        node :=
+          {
+            !node with
+            map =
+              (body_json.sha1_hex |> Digestif.SHA1.of_hex, body_json.payload)
+              :: !node.map;
+          };
+
+        let resp_json = {|"success": "payload stored successfully"|} in
+        (Http.Response.make (), Cohttp_eio.Body.of_string resp_json)
     | "/succ" when Http.Request.meth request = Http.(`POST) ->
         let body_str = Eio.Flow.read_all body in
         let body_json =

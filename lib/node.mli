@@ -4,12 +4,12 @@ type t = {
   id : SHA1.t * string;
   succ : (SHA1.t * string) option;
   pred : (SHA1.t * string) option;
-  map : (SHA1.t * Message.t) list;
+  map : (SHA1.t * string) list;
   in_ring : bool;
 } [@@deriving show]
 
 type response
-
+(*
 (* TENANCY *)
 (* ======= *)
 
@@ -42,4 +42,5 @@ val fix_fingers : t -> t (* updates finger tables TODO: fingers will be implemen
 
   we need to do lookups by checking our state, then calling lookup on our successor if the node is not found   (lookup {sha} 200ok w/ response)
   we need to do stores by checking if we should store, then calling store on our successor if not (store {sha:val} 200ok w/ response)
+*)
 *)
