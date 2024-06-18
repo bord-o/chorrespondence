@@ -1,5 +1,4 @@
 (* The endpoints *)
-open Cohttp_eio
 open Node
 open Json_types
 
@@ -27,7 +26,7 @@ let spawn sw env node =
   let handler _socket request (body : Cohttp_eio.Body.t) =
     match Http.Request.resource request with
     | "/" -> (Http.Response.make (), Cohttp_eio.Body.of_string text)
-    | "/lookup" when Http.Request.meth request = Http.(`POST) -> (
+    | "/lookup" when Http.Request.meth request = (`POST) -> (
         let body_str = Eio.Flow.read_all body in
         let body_json =
           lookup_of_yojson (Yojson.Safe.from_string body_str) |> Result.get_ok
@@ -49,7 +48,7 @@ let spawn sw env node =
             in
             let resp_json = found |> Yojson.Safe.to_string in
             (Http.Response.make (), Cohttp_eio.Body.of_string resp_json))
-    | "/store" when Http.Request.meth request = Http.(`POST) ->
+    | "/store" when Http.Request.meth request = (`POST) ->
         Eio.traceln "Storing endpoint";
         let body_str = Eio.Flow.read_all body in
         let body_json =
@@ -67,7 +66,7 @@ let spawn sw env node =
 
         let resp_json = {|"success": "payload stored successfully"|} in
         (Http.Response.make (), Cohttp_eio.Body.of_string resp_json)
-    | "/succ" when Http.Request.meth request = Http.(`POST) ->
+    | "/succ" when Http.Request.meth request = (`POST) ->
         let body_str = Eio.Flow.read_all body in
         let body_json =
           node_of_yojson (Yojson.Safe.from_string body_str) |> Result.get_ok
@@ -82,7 +81,7 @@ let spawn sw env node =
 
         let resp_json = {|"success": "successor set successfully"|} in
         (Http.Response.make (), Cohttp_eio.Body.of_string resp_json)
-    | "/pred" when Http.Request.meth request = Http.(`POST) ->
+    | "/pred" when Http.Request.meth request = (`POST) ->
         let body_str = Eio.Flow.read_all body in
         let body_json =
           node_of_yojson (Yojson.Safe.from_string body_str) |> Result.get_ok
@@ -97,7 +96,7 @@ let spawn sw env node =
 
         let resp_json = {|"success": "predecessor set successfully"|} in
         (Http.Response.make (), Cohttp_eio.Body.of_string resp_json)
-    | "/succ" when Http.Request.meth request = Http.(`GET) ->
+    | "/succ" when Http.Request.meth request = (`GET) ->
         let json =
           match !node.succ with
           | Some (sha, addr) ->
@@ -106,7 +105,7 @@ let spawn sw env node =
           | None -> "{\"error\":\"no successor set\"}"
         in
         (Http.Response.make (), Cohttp_eio.Body.of_string json)
-    | "/pred" when Http.Request.meth request = Http.(`GET) ->
+    | "/pred" when Http.Request.meth request = (`GET) ->
         let json =
           match !node.pred with
           | Some (sha, addr) ->

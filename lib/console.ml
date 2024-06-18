@@ -142,11 +142,11 @@ let spawn sw env node =
             Json_types.{ sha1_hex = sha1_id |> Digestif.SHA1.to_hex }
         in
         Eio.traceln "calling lookup with %s" (snd id_succ);
-        let (Ok resp) =
-          post ~json:body ~addr:(snd id_succ) ~endpoint:"lookup" ~sw ~env
+        let resp =
+          post ~json:body ~addr:(snd id_succ) ~endpoint:"lookup" ~sw ~env |> Result.get_ok
         in
-        let (Ok json) =
-          Yojson.Safe.from_string resp |> Json_types.found_of_yojson
+        let json =
+          Yojson.Safe.from_string resp |> Json_types.found_of_yojson |> Result.get_ok
         in
         Eio.traceln "value is: %s" json.payload
     | "store" :: "@" :: id :: msg ->

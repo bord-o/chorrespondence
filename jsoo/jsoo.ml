@@ -1,21 +1,5 @@
-(* let () = *)
-(* print_endline *)
-(* "      _                                                    \ *)
-    (* _                     \n\ *)
-   (* \  ___| |__   ___  _ __ _ __ ___  ___ _ __   ___  _ __   __| | ___ _ __   \ *)
-    (* ___ ___ \n\ *)
-   (* \ / __| '_ \\ / _ \| '__| '__/ _ \/ __| '_ \\ / _ \| '_ \\ / _` |/ _ \\ '_ \ *)
-    (* \\ / __/ _ \\\n\ *)
-    (* | (__| | | | (_) | |  | | |  __/\__ \\ |_) | (_) | | | | (_| |  __/ | | | \ *)
-    (* (_|  __/\n\ *)
-   (* \ \___|_| |_|\___/|_|  |_|  \___||___/ .__/ \___/|_| |_|\__,_|\___|_| \ *)
-    (* |_|\___\___|\n\ *)
-   (* \                                    \ *)
-    (* |_|                                          \n\n\n" *)
-
 open Chorrespondence
 open Chorrespondence.Node
-
 
 let () =
   print_endline "\n\n===================================================\n\n"
@@ -52,7 +36,6 @@ let validate () =
   else ()
 (* Main functionality here *)
 
-
 (* Upon starting th program, we can either be the first node, or join *)
 (* After this, we can use the rest of the api *)
 let get_task init me_addr join_addr =
@@ -82,7 +65,7 @@ let main () =
   in
 
   let shared_me = ref me in
-  Eio_main.run @@ fun env ->
+  Eio_brr.start @@ fun env ->
   Eio.Switch.run @@ fun sw ->
   Eio.Fiber.fork ~sw (fun () ->
       Endpoints.spawn sw env shared_me |> handle_errors);

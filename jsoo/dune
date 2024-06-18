@@ -1,0 +1,6 @@
+(executable
+ (libraries chorrespondence ipaddr js_of_ocaml-eio eio_brr)
+ (modes js)
+ (js_of_ocaml
+  (flags --enable=effects))
+ (name jsoo))

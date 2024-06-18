@@ -8,7 +8,7 @@ type t = {
   in_ring : bool;
 } [@@deriving show]
 
-type response
+(* type response *)
 (*
 (* TENANCY *)
 (* ======= *)

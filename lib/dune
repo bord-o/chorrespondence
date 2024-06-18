@@ -1,5 +1,5 @@
 (library
  (name chorrespondence)
- (libraries timedesc digestif eio.unix cohttp-eio logs.fmt logs.threaded ipaddr fmt yojson ppx_deriving_yojson.runtime zarith)
+ (libraries timedesc digestif.ocaml eio cohttp-eio logs.fmt ipaddr fmt yojson ppx_deriving_yojson.runtime zarith)
  (preprocess (pps ppx_deriving.show ppx_deriving_yojson))
  )

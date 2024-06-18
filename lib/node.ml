@@ -9,11 +9,11 @@ type t = {
 }
 [@@deriving show]
 
-type response =
-  | LookupSuccess of Message.t
-  | LookupFailure of string
-  | StoreSuccess of t
-  | StoreFailure of string
+(* type response = *)
+  (* | LookupSuccess of Message.t *)
+  (* | LookupFailure of string *)
+  (* | StoreSuccess of t *)
+  (* | StoreFailure of string *)
 
 (* TENANCY *)
 (* ======= *)
