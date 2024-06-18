@@ -9,11 +9,33 @@ type t = {
 }
 [@@deriving show]
 
-type response =
-  | LookupSuccess of Message.t
-  | LookupFailure of string
-  | StoreSuccess of t
-  | StoreFailure of string
+(* TODO: extract lookup/store/get/set into functions to be shared with the join/find_succ algorithms *)
+(* TODO: write the notify function *)
+(* TODO: write the stabilize function *)
+(* TODO: figure out what needs to be scheduled*)
+
+let dist_sha1 (lh, _) (rh, _) =
+  let aux sha = "0x" ^ Digestif.SHA1.to_hex sha |> Z.of_string in
+  let m = Z.pow (Z.of_int 2) 160 in
+  let l = aux lh in
+  let r = aux rh in
+  Z.((r - l + m) mod m)
+
+let within_range_ce start id end_ =
+  let dist_start_id = dist_sha1 start id in
+  let dist_start_end = dist_sha1 start end_ in
+  dist_start_id > Z.of_int 0 && dist_start_id <= dist_start_end
+
+let within_range_oe start id end_ =
+  let dist_start_id = dist_sha1 start id in
+  let dist_start_end = dist_sha1 start end_ in
+  dist_start_id > Z.of_int 0 && dist_start_id < dist_start_end
+
+(* type response = *)
+(* | LookupSuccess of Message.t *)
+(* | LookupFailure of string *)
+(* | StoreSuccess of t *)
+(* | StoreFailure of string *)
 
 (* TENANCY *)
 (* ======= *)

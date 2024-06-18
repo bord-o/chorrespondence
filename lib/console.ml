@@ -1,6 +1,7 @@
 (* The console *)
 open Cohttp_eio
 open Node
+open Net
 
 let ( let* ) x f = Result.bind x f
 let parse_addr = Ipaddr.with_port_of_string ~default:8080
@@ -15,100 +16,6 @@ let handle_errors r =
   | Error `ErrorStatus -> Eio.traceln "Error Status"
 
 exception ExitConsole
-
-let get ~addr ~endpoint ~sw ~env =
-  let* ip, port = parse_addr addr in
-  let addr_string =
-    match ip with
-    | V4 a -> Ipaddr.V4.to_string a
-    | V6 a -> Printf.sprintf "[%s]" @@ Ipaddr.V6.to_string a
-  in
-  let client = Client.make ~https:None env#net in
-  let resp, body =
-    Client.get ~sw client
-      (Uri.of_string
-      @@ Printf.sprintf "http://%s:%i/%s" addr_string port endpoint)
-  in
-  if Http.Status.compare resp.status `OK = 0 then
-    let res = Eio.Buf_read.(parse_exn take_all) body ~max_size:max_int in
-    Ok res
-  else (
-    Eio.traceln "Error Status:%s" @@ Http.Status.to_string resp.status;
-    Error `ErrorStatus)
-
-let post ~addr ~endpoint ~json ~sw ~env =
-  let* ip, port = parse_addr addr in
-  let client = Client.make ~https:None env#net in
-  let node = Yojson.Safe.to_string json in
-  let body_json = Cohttp_eio.Body.of_string node in
-  let resp, body =
-    Client.post ~body:body_json ~sw client
-      (Uri.of_string
-      @@ Printf.sprintf "http://%s:%i/%s" (Ipaddr.to_string ip) port endpoint)
-  in
-  if Http.Status.compare resp.status `OK = 0 then
-    let res = Eio.Buf_read.(parse_exn take_all) body ~max_size:max_int in
-    Ok res
-  else (
-    Eio.traceln "Error Status:%s" @@ Http.Status.to_string resp.status;
-    Error `ErrorStatus)
-
-(* TODO: extract lookup/store/get/set into functions to be shared with the join/find_succ algorithms *)
-(* TODO: write the find_successor function *)
-(* TODO: write the notify function *)
-(* TODO: write the stabilize function *)
-(* TODO: figure out what needs to be scheduled*)
-let dist_sha1 (lh, _) (rh, _) =
-  let m = Z.pow (Z.of_int 2) 160 in
-  let l = "0x" ^ Digestif.SHA1.to_hex lh |> Z.of_string in
-  let r = "0x" ^ Digestif.SHA1.to_hex rh |> Z.of_string in
-  Z.((r - l + m) mod m)
-
-let within_range_ce start id end_ =
-  let dist_start_id = dist_sha1 start id in
-  let dist_start_end = dist_sha1 start end_ in
-  dist_start_id > Z.of_int 0 && dist_start_id <= dist_start_end
-
-let within_range_oe start id end_ =
-  let dist_start_id = dist_sha1 start id in
-  let dist_start_end = dist_sha1 start end_ in
-  dist_start_id > Z.of_int 0 && dist_start_id < dist_start_end
-
-let closest_preceeding_node me id ~sw ~env =
-  (* if succ is between me and id then return succ, else return me *)
-  (* Eio.traceln "finding closest"; *)
-  let succ = me.succ |> Option.get in
-  (* Eio.traceln "Comparing %s to %s" (snd me.id) (snd succ); *)
-  if within_range_oe me.id succ id then
-    (* TODO: all of these comparisons need to use the SHA hash distance function *)
-    (* Eio.traceln "finding closest"; *)
-    let succsucc =
-      Eio.traceln "sending request";
-      get ~addr:(snd succ) ~endpoint:"succ" ~sw ~env
-      |> Result.get_ok |> Yojson.Safe.from_string |> Json_types.node_of_yojson
-      |> Result.get_ok
-    in
-    {
-      id = succ;
-      succ = Some (succsucc.sha1_hex |> Digestif.SHA1.of_hex, succsucc.addr);
-      pred = None;
-      map = [];
-      in_ring = true;
-    }
-  else me (* why is this route always taken *)
-
-let rec find_successor (me : Node.t) (id : Digestif.SHA1.t * string) ~sw ~env =
-  (* Eio.traceln "finding succ"; *)
-  let succ = me.succ |> Option.get in
-  if id = me.id then me.id
-  else if within_range_ce me.id id succ then (
-    Eio.traceln "in range...";
-    succ
-    (* TODO: all of these comparisons need to use the SHA hash distance function *)
-    (* how to make this work for one node *))
-  else
-    let closest = closest_preceeding_node me id ~sw ~env in
-    find_successor closest id ~sw ~env
 
 let spawn sw env node =
   print_endline "entering console...\n";
@@ -127,46 +34,54 @@ let spawn sw env node =
         Eio.traceln "Exiting...";
         Eio.Switch.fail sw ExitConsole
         (* TODO: make this leave the network gracefully *)
-    | "find_succ" :: id :: _ ->
-        let succ =
+    | "find_succ" :: id :: _ -> (
+        match
           find_successor !node (Digestif.SHA1.digest_string id, id) ~sw ~env
-        in
-        Eio.traceln "successor is: %s" (snd succ)
+        with
+        | Ok succ -> Eio.traceln "successor is: %s" (snd succ)
+        | Error e -> Eio.traceln "error finding succ")
     | [ "lookup"; id ] ->
-        Eio.traceln "calling lookup at %s" id;
-        let sha1_id = Digestif.SHA1.digest_string id in
-        let id_succ = find_successor !node (sha1_id, id) ~sw ~env in
-        Eio.traceln "find succ successful: %s" (snd id_succ);
-        let body =
-          Json_types.lookup_to_yojson
-            Json_types.{ sha1_hex = sha1_id |> Digestif.SHA1.to_hex }
-        in
-        Eio.traceln "calling lookup with %s" (snd id_succ);
-        let (Ok resp) =
-          post ~json:body ~addr:(snd id_succ) ~endpoint:"lookup" ~sw ~env
-        in
-        let (Ok json) =
-          Yojson.Safe.from_string resp |> Json_types.found_of_yojson
-        in
-        Eio.traceln "value is: %s" json.payload
+        (Eio.traceln "calling lookup at %s" id;
+         let sha1_id = Digestif.SHA1.digest_string id in
+         let* id_succ = find_successor !node (sha1_id, id) ~sw ~env in
+         Eio.traceln "find succ successful: %s" (snd id_succ);
+         let body =
+           Json_types.lookup_to_yojson
+             Json_types.{ sha1_hex = sha1_id |> Digestif.SHA1.to_hex }
+         in
+         Eio.traceln "calling lookup with %s" (snd id_succ);
+         let resp =
+           post ~json:body ~addr:(snd id_succ) ~endpoint:"lookup" ~sw ~env
+           |> Result.get_ok
+         in
+         let json =
+           Yojson.Safe.from_string resp
+           |> Json_types.found_of_yojson |> Result.get_ok
+         in
+         Eio.traceln "value is: %s" json.payload;
+         Ok ())
+        |> handle_errors
     | "store" :: "@" :: id :: msg ->
         (* to store a value we need to hash the id, find the successor for it, request the found successor to store the value, then report success *)
-        Eio.traceln "calling store at %s" id;
-        let sha1_id = Digestif.SHA1.digest_string id in
-        let id_succ = find_successor !node (sha1_id, id) ~sw ~env in
-        Eio.traceln "find succ successful: %s" (snd id_succ);
-        let body =
-          Json_types.payload_to_yojson
-            Json_types.
-              {
-                sha1_hex = sha1_id |> Digestif.SHA1.to_hex;
-                payload =
-                  List.fold_left (fun acc s -> acc ^ s ^ " ") "" msg
-                  |> String.trim;
-              }
-        in
-        Eio.traceln "calling store with %s" (snd id_succ);
-        post ~json:body ~addr:(snd id_succ) ~endpoint:"store" ~sw ~env
+        (Eio.traceln "calling store at %s" id;
+         let sha1_id = Digestif.SHA1.digest_string id in
+         let* id_succ = find_successor !node (sha1_id, id) ~sw ~env in
+         Eio.traceln "find succ successful: %s" (snd id_succ);
+         let body =
+           Json_types.payload_to_yojson
+             Json_types.
+               {
+                 sha1_hex = sha1_id |> Digestif.SHA1.to_hex;
+                 payload =
+                   List.fold_left (fun acc s -> acc ^ s ^ " ") "" msg
+                   |> String.trim;
+               }
+         in
+         Eio.traceln "calling store with %s" (snd id_succ);
+         let _ =
+           post ~json:body ~addr:(snd id_succ) ~endpoint:"store" ~sw ~env
+         in
+         Ok ())
         |> handle_errors
     | "set_succ" :: who :: what :: _ ->
         Eio.traceln "setting succ of %s to %s" who what;

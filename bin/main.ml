@@ -81,7 +81,8 @@ let main () =
     | `Join (me_addr, join_addr) ->
         Printf.printf "Joining the network using peer %s...\n" join_addr;
         let id = (Digestif.SHA1.digest_string me_addr, me_addr) in
-        { id; succ = Some id; pred = Some id; map = []; in_ring = true }
+        let them = (Digestif.SHA1.digest_string join_addr, join_addr) in
+        { id; succ = Some them; pred = Some id; map = []; in_ring = true }
   in
 
   let shared_me = ref me in
