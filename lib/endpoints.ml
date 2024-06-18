@@ -122,6 +122,7 @@ let spawn sw env node =
     (* | _ -> *)
     (* (Http.Response.make ~status:`Not_found (), Cohttp_eio.Body.of_string "") *)
   in
+  Eio.traceln "Creating socket on ip:%s and port:%i" (Ipaddr.to_string ip) port;
   let socket =
     Eio.Net.listen env#net ~sw ~backlog:128 ~reuse_addr:true
       (`Tcp (Eio.Net.Ipaddr.of_raw (Ipaddr.to_octets ip), port))

@@ -18,11 +18,16 @@ exception ExitConsole
 
 let get ~addr ~endpoint ~sw ~env =
   let* ip, port = parse_addr addr in
+  let addr_string =
+    match ip with
+    | V4 a -> Ipaddr.V4.to_string a
+    | V6 a -> Printf.sprintf "[%s]" @@ Ipaddr.V6.to_string a
+  in
   let client = Client.make ~https:None env#net in
   let resp, body =
     Client.get ~sw client
       (Uri.of_string
-      @@ Printf.sprintf "http://%s:%i/%s" (Ipaddr.to_string ip) port endpoint)
+      @@ Printf.sprintf "http://%s:%i/%s" addr_string port endpoint)
   in
   if Http.Status.compare resp.status `OK = 0 then
     let res = Eio.Buf_read.(parse_exn take_all) body ~max_size:max_int in
