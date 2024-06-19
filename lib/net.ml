@@ -70,14 +70,61 @@ let closest_preceeding_node me id ~sw ~env =
         map = [];
         in_ring = true;
       }
-  else Ok me
+  else (
+    Eio.traceln "ok";
+    Ok me)
 
 let rec find_successor me id ~sw ~env =
+  Eio.traceln "asking %s for the successor of %s" (snd me.id) (snd id);
   let succ = me.succ |> Option.get in
   if id = me.id then Ok me.id
   else if within_range_ce me.id id succ then (
     Eio.traceln "in range...";
     Ok succ)
-  else
+  else (
+    Eio.traceln "getting closer";
     let* closest = closest_preceeding_node me id ~sw ~env in
-    find_successor closest id ~sw ~env
+    if closest.id = me.id then Ok me.id
+    else
+      (* this keeps everything working for the first node that joins *)
+      find_successor closest id ~sw ~env)
+
+let stabilize me ~sw ~env =
+  Eio.traceln "Stabilizing...";
+  let succ = !me.succ |> Option.get in
+  let* res = get ~addr:(snd succ) ~endpoint:"pred" ~sw ~env in
+  Eio.traceln "json pred %s" res;
+  let () =
+    match res |> Yojson.Safe.from_string |> Json_types.node_of_yojson with
+    | Ok x ->
+        if
+          Node.within_range_ce !me.id
+            (x.sha1_hex |> Digestif.SHA1.of_hex, x.addr)
+            succ
+        then
+          me :=
+            {
+              !me with
+              succ = Some (x.sha1_hex |> Digestif.SHA1.of_hex, x.addr);
+            }
+        else ()
+    | Error _ -> Eio.traceln "No pred set"
+  in
+
+  let my_id =
+    Json_types.node_to_yojson
+      { sha1_hex = addr_hex (snd !me.id); addr = snd !me.id }
+  in
+  let* _ = post ~addr:(snd succ) ~endpoint:"notify" ~json:my_id ~sw ~env in
+  Ok ()
+
+let notify me (node : Json_types.node) =
+  Eio.traceln "Notifying...";
+  let node = (node.sha1_hex |> Digestif.SHA1.of_hex, node.addr) in
+  if Option.is_none !me.succ then me := { !me with succ = Some node } else ();
+  match !me.pred with
+  | None -> me := { !me with pred = Some node }
+  | Some id ->
+      if Node.within_range_ce id node !me.id then
+        me := { !me with pred = Some node }
+      else ()

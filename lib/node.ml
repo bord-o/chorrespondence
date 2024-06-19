@@ -14,6 +14,9 @@ type t = {
 (* TODO: write the stabilize function *)
 (* TODO: figure out what needs to be scheduled*)
 
+let addr_pair addr = (Digestif.SHA1.digest_string addr, addr)
+let addr_hex addr = Digestif.SHA1.digest_string addr |> Digestif.SHA1.to_hex
+
 let dist_sha1 (lh, _) (rh, _) =
   let aux sha = "0x" ^ Digestif.SHA1.to_hex sha |> Z.of_string in
   let m = Z.pow (Z.of_int 2) 160 in

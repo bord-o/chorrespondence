@@ -24,6 +24,8 @@ let spawn sw env node =
   let text = "testtesttest" in
 
   let handler _socket request (body : Cohttp_eio.Body.t) =
+    Eio.traceln "LOG: %s " (Http.Request.resource request);
+
     match Http.Request.resource request with
     | "/" -> (Http.Response.make (), Cohttp_eio.Body.of_string text)
     | "/lookup" when Http.Request.meth request = `POST -> (
@@ -115,6 +117,17 @@ let spawn sw env node =
         in
 
         (Http.Response.make (), Cohttp_eio.Body.of_string json)
+    | "/notify" when Http.Request.meth request = `POST ->
+        let body_str = Eio.Flow.read_all body in
+        let body_json =
+          node_of_yojson (Yojson.Safe.from_string body_str) |> Result.get_ok
+          (* TODO: handle errors here. Just need to return results for endpoints and add cases to handle_errors and call it at the end of the handler *)
+        in
+        (* TODO: we should really validate that the data is good before we just mutate our state based on an arbitrary request *)
+        Net.notify node body_json;
+
+        let resp_json = {|"success": "notify success"|} in
+        (Http.Response.make (), Cohttp_eio.Body.of_string resp_json)
     | s ->
         (* any other enpoints hit this *)
         ( Http.Response.make (),

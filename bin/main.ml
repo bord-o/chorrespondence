@@ -15,13 +15,11 @@
 
 open Chorrespondence
 open Chorrespondence.Node
-open Cohttp_eio
-
-let ( let* ) x f = Result.bind x f
 
 let () =
   print_endline "\n\n===================================================\n\n"
 
+let ( let* ) x f = Result.bind x f
 let usage_msg = "chorrespondence [-i] [-j HOST:PORT]"
 let join_addr = ref ""
 let me_addr = ref ""
@@ -54,8 +52,6 @@ let validate () =
   else ()
 (* Main functionality here *)
 
-let parse_addr = Ipaddr.with_port_of_string ~default:8080
-
 (* Upon starting th program, we can either be the first node, or join *)
 (* After this, we can use the rest of the api *)
 let get_task init me_addr join_addr =
@@ -68,26 +64,63 @@ let handle_errors r =
   | Error `IpAddrParseError -> Eio.traceln "Error parsing ip addr"
   | Error `NoSuccessor -> Eio.traceln "No successor node set"
   | Error (`Msg s) -> Eio.traceln "Error Msg: %s" s
+  | Error `ErrorStatus -> Eio.traceln "Errorstatus"
 
 let main () =
   let () = validate () in
   let task = get_task !init !me_addr !join_addr in
+  Eio_main.run @@ fun env ->
+  Eio.Switch.run @@ fun sw ->
   let me : Node.t =
     match task with
     | `Init me_addr ->
         print_endline "Initializing connection and picking a port to use...";
         let id = (Digestif.SHA1.digest_string me_addr, me_addr) in
-        { id; succ = Some id; pred = Some id; map = []; in_ring = true }
+        { id; succ = None; pred = None; map = []; in_ring = true }
     | `Join (me_addr, join_addr) ->
         Printf.printf "Joining the network using peer %s...\n" join_addr;
         let id = (Digestif.SHA1.digest_string me_addr, me_addr) in
-        let them = (Digestif.SHA1.digest_string join_addr, join_addr) in
-        { id; succ = Some them; pred = Some id; map = []; in_ring = true }
+        { id; succ = None; pred = None; map = []; in_ring = false }
   in
 
   let shared_me = ref me in
-  Eio_main.run @@ fun env ->
-  Eio.Switch.run @@ fun sw ->
+  let () =
+    (match task with
+    | `Init _ ->
+        Eio.traceln "ok";
+        Ok ()
+    | `Join (_, join_addr) -> (
+        let succsucc =
+          Eio.traceln "sending request";
+          let* resp = Net.get ~addr:join_addr ~endpoint:"succ" ~sw ~env in
+          resp |> Yojson.Safe.from_string |> Json_types.node_of_yojson
+          |> Result.map_error (fun e ->
+                 `Msg (Printf.sprintf "Failed to find prec node: %s" e))
+        in
+        match succsucc with
+        | Ok succsucc ->
+            let ask =
+              {
+                id = addr_pair join_addr;
+                succ =
+                  Some (succsucc.sha1_hex |> Digestif.SHA1.of_hex, succsucc.addr);
+                pred = None;
+                map = [];
+                in_ring = true;
+              }
+            in
+
+            Eio.traceln "Joining the network using peer %s...\n" join_addr;
+            let* res = Net.find_successor ask me.id ~sw ~env in
+            Ok (shared_me := { !shared_me with succ = Some res })
+        | Error (`Msg _) ->
+            Ok
+              (shared_me :=
+                 { !shared_me with succ = Some (addr_pair join_addr) })
+        | Error e -> Error e))
+    |> handle_errors
+  in
+
   Eio.Fiber.fork ~sw (fun () ->
       Endpoints.spawn sw env shared_me |> handle_errors);
   Eio.Fiber.fork ~sw (fun () -> Console.spawn sw env shared_me |> handle_errors)
