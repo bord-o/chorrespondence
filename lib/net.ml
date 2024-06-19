@@ -53,7 +53,9 @@ let post ~addr ~endpoint ~json ~sw ~env =
     Error `ErrorStatus)
 
 let closest_preceeding_node me id ~sw ~env =
-  let succ = me.succ |> Option.get in
+  let* succ =
+    match me.succ with Some s -> Ok s | None -> Error (`Msg "Succ not set")
+  in
   if within_range_oe me.id succ id then
     let* succsucc =
       Eio.traceln "sending request";
@@ -76,7 +78,9 @@ let closest_preceeding_node me id ~sw ~env =
 
 let rec find_successor me id ~sw ~env =
   Eio.traceln "asking %s for the successor of %s" (snd me.id) (snd id);
-  let succ = me.succ |> Option.get in
+  let* succ =
+    match me.succ with Some s -> Ok s | None -> Error (`Msg "Succ not set")
+  in
   if id = me.id then Ok me.id
   else if within_range_ce me.id id succ then (
     Eio.traceln "in range...";
@@ -91,7 +95,9 @@ let rec find_successor me id ~sw ~env =
 
 let stabilize me ~sw ~env =
   Eio.traceln "Stabilizing...";
-  let succ = !me.succ |> Option.get in
+  let* succ =
+    match !me.succ with Some s -> Ok s | None -> Error (`Msg "Succ not set")
+  in
   let* res = get ~addr:(snd succ) ~endpoint:"pred" ~sw ~env in
   Eio.traceln "json pred %s" res;
   let () =

@@ -123,7 +123,8 @@ let main () =
 
   Eio.Fiber.fork ~sw (fun () ->
       Endpoints.spawn sw env shared_me |> handle_errors);
-  Eio.Fiber.fork ~sw (fun () -> Console.spawn sw env shared_me |> handle_errors)
+  Eio.Fiber.fork ~sw (fun () -> Console.spawn sw env shared_me |> handle_errors);
+  Eio.Fiber.fork ~sw (fun () -> Daemon.spawn sw env shared_me)
 (* TODO: the server and client need to share the node.t memory *)
 (* I could just use a queue to hold the changes *)
 (* Or just use a mutex *)
