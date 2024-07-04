@@ -125,6 +125,7 @@ let spawn sw env node =
         Eio.traceln "Current node details: \n%s" @@ Node.show !node
     | "help" :: _ -> Eio.traceln "%s" @@ usage ()
     (* =======================MANUAL STATE MAINTANENCE COMMANDS======================================= *)
+    | "redistribute" :: _ -> Net.redistribute node ~sw ~env |> handle_errors
     | "stabilize" :: _ -> Net.stabilize node ~sw ~env |> handle_errors
     | "fingers" :: _ -> Eio.traceln "Fixing fingers table..."
     | "set_my_succ" :: addr :: _ ->

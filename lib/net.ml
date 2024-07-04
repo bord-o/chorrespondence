@@ -134,3 +134,16 @@ let notify me (node : Json_types.node) =
       if Node.within_range_ce id node !me.id then
         me := { !me with pred = Some node }
       else ()
+
+let redistribute me ~sw ~env =
+  (* Ask succ if they are storing anything that I should be storing *)
+  (* TODO: add an endpoint for redistribution. GET /redistribute which returns any nodes that the requesting node should be storing instead.
+     The callee should then be able to just store the resulting nodes json *)
+  Eio.traceln "Redistributing...";
+  let* succ =
+    match !me.succ with Some s -> Ok s | None -> Error (`Msg "Succ not set")
+  in
+  let* res = get ~addr:(snd succ) ~endpoint:"redistribute" ~sw ~env in
+  Ok (Eio.traceln "redistributing: %s" res)
+(* let () = *)
+(* match res |> Yojson.Safe.from_string |> Json_types.node_of_yojson with *)

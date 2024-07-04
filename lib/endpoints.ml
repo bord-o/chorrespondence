@@ -128,6 +128,22 @@ let spawn sw env node =
 
         let resp_json = {|"success": "notify success"|} in
         (Http.Response.make (), Cohttp_eio.Body.of_string resp_json)
+    | "/redistribute" when Http.Request.meth request = `GET ->
+        let map = !node.map in
+        (* for each value in the map, check if the key is between the pred and me, if it is not then it should be sent to the predecessor to redistribute *)
+        let pred = Option.get !node.pred in
+        let to_move =
+          map
+          |> List.filter (fun kv ->
+                 not @@ Node.within_range_ce pred kv !node.id)
+        in
+        let payload =
+          to_move
+          |> List.map (fun (k, v) ->
+                 { sha1_hex = Digestif.SHA1.to_hex k; payload = v })
+          |> Json_types.redistribution_to_yojson |> Yojson.Safe.to_string
+        in
+        (Http.Response.make (), Cohttp_eio.Body.of_string payload)
     | s ->
         (* any other enpoints hit this *)
         ( Http.Response.make (),
