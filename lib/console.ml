@@ -79,14 +79,22 @@ let spawn sw env node =
          let sha1_id = Digestif.SHA1.digest_string id in
          let* id_succ = find_successor !node (sha1_id, id) ~sw ~env in
          Eio.traceln "find succ successful: %s" (snd id_succ);
+         let listing =
+           List.fold_left (fun acc s -> acc ^ s ^ " ") "" msg |> String.trim
+         in
+         let nonce_str, hash = Pow.proof_of_work listing 0 in
+         Eio.traceln "Found proof of work \nnonce: %s\nhash: %s" nonce_str
+           (Digestif.BLAKE2B.to_hex hash);
          let body =
-           Json_types.payload_to_yojson
+           Json_types.store_req_to_yojson
              Json_types.
                {
-                 sha1_hex = sha1_id |> Digestif.SHA1.to_hex;
+                 nonce = nonce_str;
                  payload =
-                   List.fold_left (fun acc s -> acc ^ s ^ " ") "" msg
-                   |> String.trim;
+                   {
+                     sha1_hex = sha1_id |> Digestif.SHA1.to_hex;
+                     payload = listing;
+                   };
                }
          in
          Eio.traceln "calling store with %s" (snd id_succ);
