@@ -1,5 +1,5 @@
 (* six seems to be good, can improve granularity by comparing on binary representation *)
-let difficulty = 7
+let difficulty = 6
 
 let hash_listing listing nonce =
   let combined = listing ^ nonce in
